@@ -1,0 +1,15 @@
+query SearchQuery($term: String!,
+            $location: String!,
+            $limit: Int!) {
+
+    search(term: $term, limit: $limit, location: $location) {
+        business {
+            name
+            price
+            photos
+            location {
+                address1
+            }
+        }
+    }
+}

@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">EnvoyCoffee</string>
+    <string name="network_error">Error loading shops</string>
+    <string name="reload_shops">Reload shops</string>
+</resources>
