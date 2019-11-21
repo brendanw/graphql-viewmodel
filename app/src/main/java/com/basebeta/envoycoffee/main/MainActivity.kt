@@ -56,10 +56,7 @@ class MainActivity : AppCompatActivity() {
         })
     )
 
-    if (!viewModel.hasInited) {
-      viewModel.processInput(MainEvent.LoadShopsEvent.ScreenLoadEvent(lastState?.shopList ?: emptyList()))
-      viewModel.hasInited = true
-    }
+    viewModel.processInput(MainEvent.LoadShopsEvent.ScreenLoadEvent(lastState?.shopList ?: emptyList()))
 
     recycler_view.addOnScrollListener(object : RecyclerView.OnScrollListener() {
       override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
@@ -114,7 +111,7 @@ class MainActivity : AppCompatActivity() {
 
   private fun setupList() {
     with(recycler_view) {
-      adapter = MainAdapter { item -> viewModel.processInput(MainEvent.TapItemEvent(shopName = item.name)) }
+      adapter = MainAdapter { item -> viewModel.processInput(MainEvent.TapItemEvent(shopName = item.name, totalItemTaps = lastState?.totalItemTaps ?: 0)) }
       layoutManager = LinearLayoutManager(this@MainActivity).apply {
         orientation = LinearLayoutManager.VERTICAL
       }

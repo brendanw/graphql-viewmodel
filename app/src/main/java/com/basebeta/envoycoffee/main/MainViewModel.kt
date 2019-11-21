@@ -10,7 +10,6 @@ import com.basebeta.envoycoffee.YelpApi
 import com.jakewharton.rxrelay2.BehaviorRelay
 import com.jakewharton.rxrelay2.PublishRelay
 import io.reactivex.Observable
-import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
 import io.reactivex.rxkotlin.subscribeBy
 import io.reactivex.schedulers.Schedulers
@@ -23,18 +22,18 @@ class MainViewModel(
 ): AndroidViewModel(app) {
     val viewState: BehaviorRelay<MainViewState> = BehaviorRelay.create()
     private val disposable: Disposable
-    private var eventEmitter: PublishRelay<MainEvent> = PublishRelay.create()
+    private var inputEvents: PublishRelay<MainEvent> = PublishRelay.create()
 
     init {
-        disposable = eventEmitter
+        disposable = inputEvents
             .doOnNext {
                 Timber.d("--- emitted event $it")
             }
-            .eventToResult()
+            .eventToResult() //publish(merge())
             .doOnNext {
                 Timber.d("--- result event $it")
             }
-            .resultToViewState()
+            .resultToViewState() //scan
             .doOnNext {
                 Timber.d("--- view state $it")
             }.subscribeBy(onNext = {
@@ -47,13 +46,16 @@ class MainViewModel(
         disposable.dispose()
     }
 
+    /**
+     *
+     */
     private fun Observable<MainEvent>.eventToResult(): Observable<MainResult> {
-        return publish { o ->
+        return publish { multicastedEvent ->
             Observable.merge(
-                o.ofType(MainEvent.LoadShopsEvent.ScreenLoadEvent::class.java).loadShops(),
-                o.ofType(MainEvent.TapItemEvent::class.java).onItemTap(),
-                o.ofType(MainEvent.LoadShopsEvent.ReloadShopsEvent::class.java).loadShops(),
-                o.ofType(MainEvent.LoadShopsEvent.ScrollToEndEvent::class.java).loadShops()
+                multicastedEvent.ofType(MainEvent.LoadShopsEvent.ScreenLoadEvent::class.java).loadShops(),
+                multicastedEvent.ofType(MainEvent.TapItemEvent::class.java).onItemTap(),
+                multicastedEvent.ofType(MainEvent.LoadShopsEvent.ReloadShopsEvent::class.java).loadShops(),
+                multicastedEvent.ofType(MainEvent.LoadShopsEvent.ScrollToEndEvent::class.java).loadShops()
             )
         }
     }
@@ -86,7 +88,7 @@ class MainViewModel(
 
     private fun Observable<MainEvent.TapItemEvent>.onItemTap(): Observable<MainResult.TapItemResult> {
         return map {
-            MainResult.TapItemResult
+            MainResult.TapItemResult(totalItemTaps = it.totalItemTaps + 1)
         }
     }
 
@@ -101,14 +103,14 @@ class MainViewModel(
                         forceRender = if (result.forceRender) UUID.randomUUID().toString() else "")
                 }
                 is MainResult.TapItemResult -> {
-                    viewState
+                    viewState.copy(totalItemTaps = result.totalItemTaps)
                 }
             }
         }.distinctUntilChanged()
     }
 
     fun processInput(event: MainEvent) {
-        eventEmitter.accept(event)
+        inputEvents.accept(event)
     }
 
     class MainViewModelFactory(
