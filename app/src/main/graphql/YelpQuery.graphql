@@ -1,8 +1,10 @@
 query SearchQuery($term: String!,
             $location: String!,
-            $limit: Int!) {
+            $limit: Int!,
+            $open_now: Boolean!,
+            $offset: Int!) {
 
-    search(term: $term, limit: $limit, location: $location) {
+    search(term: $term, limit: $limit, location: $location, open_now: $open_now, offset: $offset) {
         business {
             name
             price

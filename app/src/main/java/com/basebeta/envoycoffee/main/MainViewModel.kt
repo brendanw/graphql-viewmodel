@@ -24,7 +24,6 @@ class MainViewModel(
     val viewState: BehaviorRelay<MainViewState> = BehaviorRelay.create()
     private val disposable: Disposable
     private var eventEmitter: PublishRelay<MainEvent> = PublishRelay.create()
-    var hasInited = false
 
     init {
         disposable = eventEmitter
@@ -53,39 +52,35 @@ class MainViewModel(
             Observable.merge(
                 o.ofType(MainEvent.LoadShopsEvent.ScreenLoadEvent::class.java).loadShops(),
                 o.ofType(MainEvent.TapItemEvent::class.java).onItemTap(),
-                o.ofType(MainEvent.LoadShopsEvent.ReloadShopsEvent::class.java).loadShops()
+                o.ofType(MainEvent.LoadShopsEvent.ReloadShopsEvent::class.java).loadShops(),
+                o.ofType(MainEvent.LoadShopsEvent.ScrollToEndEvent::class.java).loadShops()
             )
         }
     }
 
     private fun Observable<out MainEvent.LoadShopsEvent>.loadShops(): Observable<MainResult.QueryYelpResult> {
         return this.switchMap { event ->
-            return@switchMap if (event.list.isEmpty()) {
-                yelpApi.getShops()
+            return@switchMap yelpApi.getShops(event.currentPage)
                     .subscribeOn(Schedulers.io())
                     .map {
-                        val diffResult = DiffUtil.calculateDiff(ItemDiffHelper(oldList = event.list, newList = it))
+                        val newList = event.list.toMutableList().apply {
+                            addAll(it)
+                        }
+                        val newPage = event.currentPage + 1
+                        val diffResult = DiffUtil.calculateDiff(ItemDiffHelper(oldList = event.list, newList = newList))
                         MainResult.QueryYelpResult(
-                            shopList = it,
+                            shopList = newList,
                             networkError = false,
-                            diffResult = diffResult)
+                            diffResult = diffResult,
+                            currentPage = newPage)
                     }
                     .onErrorReturn {
                         val diffResult = DiffUtil.calculateDiff(ItemDiffHelper(oldList = event.list, newList = event.list))
                         MainResult.QueryYelpResult(shopList = event.list,
                             networkError = true,
                             forceRender = true,
-                            diffResult = diffResult)
+                            diffResult = diffResult, currentPage = event.currentPage)
                     }
-            } else {
-                Observable.defer {
-                    val diffResult = DiffUtil.calculateDiff(ItemDiffHelper(oldList = event.list, newList = event.list))
-                    Observable.just(MainResult.QueryYelpResult(shopList = event.list,
-                        networkError = true,
-                        forceRender = true,
-                        diffResult = diffResult))
-                }.subscribeOn(Schedulers.io())
-            }
         }
     }
 
@@ -100,6 +95,7 @@ class MainViewModel(
             when(result) {
                 is MainResult.QueryYelpResult -> {
                     viewState.copy(
+                        currentPage = result.currentPage,
                         shopList = result.shopList,
                         showNetworkError = result.networkError,
                         forceRender = if (result.forceRender) UUID.randomUUID().toString() else "")

@@ -14,7 +14,7 @@ import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.Executor
 
 interface IYelpApi {
-    fun getShops(): Observable<List<YelpResult>>
+    fun getShops(page: Int): Observable<List<YelpResult>>
 }
 
 class YelpApi : IYelpApi {
@@ -67,13 +67,15 @@ class YelpApi : IYelpApi {
     /**
      * Apollo kotlin sample shows handling nullable for graphql types specified as non-null. Odd.
      */
-    override fun getShops(): Observable<List<YelpResult>> {
+    override fun getShops(page: Int): Observable<List<YelpResult>> {
         val apolloCallable =
             apolloClient.query(
                 SearchQuery(
                     limit = 10,
                     location = "410 Townsend Street, San Francisco, CA",
-                    term = "coffee"
+                    term = "coffee",
+                    open_now = true,
+                    offset = page * 10
                 )
             )
         return Rx2Apollo.from(apolloCallable).map { response ->
