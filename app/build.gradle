@@ -71,6 +71,8 @@ dependencies {
 
     implementation 'com.apollographql.apollo:apollo-runtime:1.2.1'
     implementation 'com.apollographql.apollo:apollo-rx2-support:1.2.1'
+    implementation "com.apollographql.apollo:apollo-coroutines-support:1.2.1"
+
 
     implementation 'com.squareup.okhttp3:okhttp:4.2.2'
     implementation 'com.squareup.okhttp3:logging-interceptor:4.2.2'

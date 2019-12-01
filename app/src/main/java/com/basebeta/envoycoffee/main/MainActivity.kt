@@ -56,7 +56,7 @@ class MainActivity : AppCompatActivity() {
         })
     )
 
-    viewModel.processInput(MainEvent.LoadShopsEvent.ScreenLoadEvent(lastState?.shopList ?: emptyList()))
+    viewModel.processInput(InputEvent.LoadShopsEvent.ScreenLoadEvent(lastState?.shopList ?: emptyList()))
 
     recycler_view.addOnScrollListener(object : RecyclerView.OnScrollListener() {
       override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
@@ -70,7 +70,7 @@ class MainActivity : AppCompatActivity() {
           if (loading) {
             if (visibleItemCount + pastVisiblesItems >= totalItemCount) {
               loading = false
-              viewModel.processInput(MainEvent.LoadShopsEvent.ScrollToEndEvent(lastState?.shopList ?: emptyList(), lastState?.currentPage ?: 0))
+              viewModel.processInput(InputEvent.LoadShopsEvent.ScrollToEndEvent(lastState?.shopList ?: emptyList(), lastState?.currentPage ?: 0))
             }
           }
         }
@@ -92,7 +92,7 @@ class MainActivity : AppCompatActivity() {
     if (viewState.showNetworkError) {
       errorSnackbar = Snackbar.make(root, R.string.network_error, Snackbar.LENGTH_INDEFINITE)
       errorSnackbar?.setAction(R.string.reload_shops) {
-        viewModel.processInput(MainEvent.LoadShopsEvent.ReloadShopsEvent(lastState?.shopList ?: emptyList(),
+        viewModel.processInput(InputEvent.LoadShopsEvent.ReloadShopsEvent(lastState?.shopList ?: emptyList(),
           lastState?.currentPage ?: 0))
       }
       errorSnackbar?.show()
@@ -111,7 +111,7 @@ class MainActivity : AppCompatActivity() {
 
   private fun setupList() {
     with(recycler_view) {
-      adapter = MainAdapter { item -> viewModel.processInput(MainEvent.TapItemEvent(shopName = item.name, totalItemTaps = lastState?.totalItemTaps ?: 0)) }
+      adapter = MainAdapter { item -> viewModel.processInput(InputEvent.TapItemEvent(shopName = item.name, totalItemTaps = lastState?.totalItemTaps ?: 0)) }
       layoutManager = LinearLayoutManager(this@MainActivity).apply {
         orientation = LinearLayoutManager.VERTICAL
       }

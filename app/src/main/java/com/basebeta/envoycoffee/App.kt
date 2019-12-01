@@ -1,7 +1,6 @@
 package com.basebeta.envoycoffee
 
 import android.app.Application
-import sun.jvm.hotspot.utilities.IntArray
 
 
 class App : Application() {
@@ -10,13 +9,6 @@ class App : Application() {
 
         val yelpApi: YelpApi by lazy {
             YelpApi()
-        }
-
-        val retrofit: Retrofit by lazy {
-            Builder()
-                .baseUrl("https://api.github.com")
-                .addConverterFactory(GsonConverterFactory.create())
-                .build()
         }
     }
 
