@@ -46,9 +46,6 @@ class MainViewModel(
         disposable.dispose()
     }
 
-    /**
-     *
-     */
     private fun Observable<MainEvent>.eventToResult(): Observable<MainResult> {
         return publish { multicastedEvent ->
             Observable.merge(
