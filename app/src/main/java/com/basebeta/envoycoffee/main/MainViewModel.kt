@@ -13,6 +13,9 @@ import io.reactivex.Observable
 import io.reactivex.disposables.Disposable
 import io.reactivex.rxkotlin.subscribeBy
 import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flattenMerge
+import kotlinx.coroutines.flow.flowOf
 import timber.log.Timber
 import java.util.*
 
@@ -94,7 +97,6 @@ class MainViewModel(
         return scan(MainViewState()) { lastState, result ->
             when(result) {
                 is MainResult.QueryYelpResult -> {
-                    //TODO: Should be using
                     lastState.copy(
                         currentPage = result.currentPage,
                         shopList = result.shopList,
