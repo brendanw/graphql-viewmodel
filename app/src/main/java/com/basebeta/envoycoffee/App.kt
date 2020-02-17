@@ -1,8 +1,8 @@
 package com.basebeta.envoycoffee
 
 import android.app.Application
-import sun.jvm.hotspot.utilities.IntArray
-
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 
 class App : Application() {
     companion object {
@@ -13,7 +13,7 @@ class App : Application() {
         }
 
         val retrofit: Retrofit by lazy {
-            Builder()
+            Retrofit.Builder()
                 .baseUrl("https://api.github.com")
                 .addConverterFactory(GsonConverterFactory.create())
                 .build()

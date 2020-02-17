@@ -3,18 +3,22 @@ package com.basebeta.envoycoffee
 import SearchQuery
 import android.util.Log
 import com.apollographql.apollo.ApolloClient
+import com.apollographql.apollo.coroutines.toFlow
 import com.apollographql.apollo.interceptor.ApolloInterceptor
 import com.apollographql.apollo.interceptor.ApolloInterceptorChain
 import com.apollographql.apollo.rx2.Rx2Apollo
 import com.basebeta.envoycoffee.main.YelpResult
 import io.reactivex.Observable
 import io.reactivex.Single
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.Executor
 
 interface IYelpApi {
     fun getShops(page: Int): Observable<List<YelpResult>>
+    fun coGetShops(page: Int): Flow<List<YelpResult>>
 }
 
 class YelpApi : IYelpApi {
@@ -62,6 +66,28 @@ class YelpApi : IYelpApi {
                 }
             })
         }.build()
+    }
+
+    override fun coGetShops(page: Int): Flow<List<YelpResult>> {
+        return apolloClient.query(
+            SearchQuery(
+                limit = 10,
+                location = "410 Townsend Street, San Francisco, CA",
+                term = "coffee",
+                open_now = true,
+                offset = page * 10
+            )
+        ).toFlow()
+            .map { response ->
+                response.data()!!.search!!.business!!.map {
+                    YelpResult(
+                        name = it!!.name!!,
+                        address = it.location!!.address1!!,
+                        cost = it.price,
+                        imageUrl = it.photos!![0]!!
+                    )
+                }
+            }
     }
 
     /**

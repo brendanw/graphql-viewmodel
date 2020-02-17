@@ -18,13 +18,13 @@ data class MainViewState(
 )
 
 // Events are user inputs or lifecycle events
-sealed class MainEvent {
-    sealed class LoadShopsEvent(val list: List<YelpResult>, val currentPage: Int) : MainEvent() {
+sealed class InputEvent {
+    sealed class LoadShopsEvent(val list: List<YelpResult>, val currentPage: Int) : InputEvent() {
         data class ScreenLoadEvent(val lastList: List<YelpResult>) : LoadShopsEvent(lastList, 0)
         data class ReloadShopsEvent(val lastList: List<YelpResult>, val page: Int) : LoadShopsEvent(lastList, page)
         data class ScrollToEndEvent(val lastList: List<YelpResult>, val page: Int): LoadShopsEvent(lastList, page)
     }
-    data class TapItemEvent(val shopName: String, val totalItemTaps: Int) : MainEvent()
+    data class TapItemEvent(val shopName: String, val totalItemTaps: Int) : InputEvent()
 }
 
 // Each event triggers a result

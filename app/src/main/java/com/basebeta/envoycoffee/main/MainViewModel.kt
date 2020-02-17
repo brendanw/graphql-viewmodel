@@ -13,6 +13,9 @@ import io.reactivex.Observable
 import io.reactivex.disposables.Disposable
 import io.reactivex.rxkotlin.subscribeBy
 import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flattenMerge
+import kotlinx.coroutines.flow.flowOf
 import timber.log.Timber
 import java.util.*
 
@@ -22,7 +25,7 @@ class MainViewModel(
 ): AndroidViewModel(app) {
     val viewState: BehaviorRelay<MainViewState> = BehaviorRelay.create()
     private val disposable: Disposable
-    private var inputEvents: PublishRelay<MainEvent> = PublishRelay.create()
+    private var inputEvents: PublishRelay<InputEvent> = PublishRelay.create()
 
     init {
         disposable = inputEvents
@@ -46,18 +49,19 @@ class MainViewModel(
         disposable.dispose()
     }
 
-    private fun Observable<MainEvent>.eventToResult(): Observable<MainResult> {
+    // Why not just do a flatMap + when statement here?
+    private fun Observable<InputEvent>.eventToResult(): Observable<MainResult> {
         return publish { multicastedEvent ->
             Observable.merge(
-                multicastedEvent.ofType(MainEvent.LoadShopsEvent.ScreenLoadEvent::class.java).loadShops(),
-                multicastedEvent.ofType(MainEvent.TapItemEvent::class.java).onItemTap(),
-                multicastedEvent.ofType(MainEvent.LoadShopsEvent.ReloadShopsEvent::class.java).loadShops(),
-                multicastedEvent.ofType(MainEvent.LoadShopsEvent.ScrollToEndEvent::class.java).loadShops()
+                multicastedEvent.ofType(InputEvent.LoadShopsEvent.ScreenLoadEvent::class.java).loadShops(),
+                multicastedEvent.ofType(InputEvent.TapItemEvent::class.java).onItemTap(),
+                multicastedEvent.ofType(InputEvent.LoadShopsEvent.ReloadShopsEvent::class.java).loadShops(),
+                multicastedEvent.ofType(InputEvent.LoadShopsEvent.ScrollToEndEvent::class.java).loadShops()
             )
         }
     }
 
-    private fun Observable<out MainEvent.LoadShopsEvent>.loadShops(): Observable<MainResult.QueryYelpResult> {
+    private fun Observable<out InputEvent.LoadShopsEvent>.loadShops(): Observable<MainResult.QueryYelpResult> {
         return this.switchMap { event ->
             return@switchMap yelpApi.getShops(event.currentPage)
                     .subscribeOn(Schedulers.io())
@@ -83,30 +87,31 @@ class MainViewModel(
         }
     }
 
-    private fun Observable<MainEvent.TapItemEvent>.onItemTap(): Observable<MainResult.TapItemResult> {
+    private fun Observable<InputEvent.TapItemEvent>.onItemTap(): Observable<MainResult.TapItemResult> {
         return map {
             MainResult.TapItemResult(totalItemTaps = it.totalItemTaps + 1)
         }
     }
 
     private fun Observable<MainResult>.resultToViewState(): Observable<MainViewState> {
-        return scan(MainViewState()) { viewState, result ->
+        return scan(MainViewState()) { lastState, result ->
             when(result) {
                 is MainResult.QueryYelpResult -> {
-                    viewState.copy(
+                    lastState.copy(
                         currentPage = result.currentPage,
                         shopList = result.shopList,
                         showNetworkError = result.networkError,
                         forceRender = if (result.forceRender) UUID.randomUUID().toString() else "")
                 }
                 is MainResult.TapItemResult -> {
-                    viewState.copy(totalItemTaps = result.totalItemTaps)
+                    lastState.copy(totalItemTaps = result.totalItemTaps)
                 }
             }
         }.distinctUntilChanged()
     }
 
-    fun processInput(event: MainEvent) {
+
+    fun processInput(event: InputEvent) {
         inputEvents.accept(event)
     }
 
