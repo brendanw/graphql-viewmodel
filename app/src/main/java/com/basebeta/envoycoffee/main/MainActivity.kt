@@ -1,15 +1,18 @@
 package com.basebeta.envoycoffee.main
 
 import android.app.Activity
+import android.app.Application
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.basebeta.envoycoffee.App
 import com.basebeta.envoycoffee.R
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.android.synthetic.main.main.*
@@ -36,7 +39,7 @@ class MainActivity : AppCompatActivity() {
 
     viewModel = ViewModelProvider(
       this,
-      ViewModelProvider.NewInstanceFactory()
+      VMFactory(App.instance)
     ).get(CoMainViewModel::class.java)
 
     lifecycleScope.launch {
@@ -130,5 +133,15 @@ class MainActivity : AppCompatActivity() {
       )
       addItemDecoration(divider)
     }
+  }
+}
+
+class VMFactory(
+  private val app: Application
+) : ViewModelProvider.Factory {
+  override fun <T : ViewModel?> create(modelClass: Class<T>): T {
+    return CoMainViewModel(
+      app = app
+    ) as T
   }
 }
