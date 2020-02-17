@@ -7,8 +7,7 @@ import androidx.recyclerview.widget.DiffUtil
 import com.basebeta.envoycoffee.App
 import com.basebeta.envoycoffee.YelpApi
 import com.basebeta.envoycoffee.flow.FlowRelay
-import com.basebeta.envoycoffee.multicast.Multicaster
-import hu.akarnokd.kotlin.flow.publish
+import com.dropbox.flow.multicast.Multicaster
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -19,7 +18,8 @@ import java.util.*
 
 @UseExperimental(FlowPreview::class)
 class CoMainViewModel(
-  private val yelpApi: YelpApi = App.yelpApi
+  private val yelpApi: YelpApi = App.yelpApi,
+  app: Application
 ) : AndroidViewModel(app) {
 
   val viewStateFlow: FlowRelay<MainViewState> = FlowRelay()
@@ -29,19 +29,19 @@ class CoMainViewModel(
     viewModelScope.launch {
       val mcaster = Multicaster(
         scope = viewModelScope,
-        source = {
-          inputEvents
-            .onEach { Timber.i("input event $it") }
-        },
-        onEach = {}
+        bufferSize = 16,
+        source = inputEvents.onEach { Timber.i("input event $it") },
+        piggybackingDownstream = false,
+        keepUpstreamAlive = false,
+        onEach = { }
       )
       merge(
-        mcaster.create()
+        mcaster.newDownstream()
           .filterIsInstance<InputEvent.LoadShopsEvent.ScreenLoadEvent>()
           .loadShops(),
-        mcaster.create().filterIsInstance<InputEvent.LoadShopsEvent.ReloadShopsEvent>().loadShops(),
-        mcaster.create().filterIsInstance<InputEvent.LoadShopsEvent.ScrollToEndEvent>().loadShops(),
-        mcaster.create().filterIsInstance<InputEvent.TapItemEvent>().onItemTap()
+        mcaster.newDownstream().filterIsInstance<InputEvent.LoadShopsEvent.ReloadShopsEvent>().loadShops(),
+        mcaster.newDownstream().filterIsInstance<InputEvent.LoadShopsEvent.ScrollToEndEvent>().loadShops(),
+        mcaster.newDownstream().filterIsInstance<InputEvent.TapItemEvent>().onItemTap()
       )
         .onEach { Timber.i("result $it") }
         .resultToViewState()
@@ -54,28 +54,7 @@ class CoMainViewModel(
   /**
    * WARNING: Limited to 16 concurrent flows
    */
-  fun <T> merge(vararg flows: Flow<T>): Flow<T> = flowOf(*flows).flattenMerge()
-
-  fun <T> Flow<T>.myPublish(transform: suspend (value: T) -> T): Flow<T> {
-    return Multicaster(
-      scope = viewModelScope,
-      source = { this },
-      onEach = {}
-    ).create()
-  }
-
-  private fun Flow<InputEvent>.eventToResult(): Flow<MainResult> {
-    return publish { multicastFlow ->
-      merge(
-        multicastFlow
-          .filterIsInstance<InputEvent.LoadShopsEvent.ScreenLoadEvent>()
-          .loadShops(),
-        multicastFlow.filterIsInstance<InputEvent.LoadShopsEvent.ReloadShopsEvent>().loadShops(),
-        multicastFlow.filterIsInstance<InputEvent.LoadShopsEvent.ScrollToEndEvent>().loadShops(),
-        multicastFlow.filterIsInstance<InputEvent.TapItemEvent>().onItemTap()
-      )
-    }
-  }
+  private fun <T> merge(vararg flows: Flow<T>): Flow<T> = flowOf(*flows).flattenMerge()
 
   private fun Flow<InputEvent.TapItemEvent>.onItemTap(): Flow<MainResult.TapItemResult> {
     return map {
