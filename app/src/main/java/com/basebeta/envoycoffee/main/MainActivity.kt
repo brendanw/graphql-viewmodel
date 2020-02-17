@@ -40,7 +40,8 @@ class MainActivity : AppCompatActivity() {
     ).get(CoMainViewModel::class.java)
 
     lifecycleScope.launch {
-      viewModel.viewStateFlow
+      viewModel
+        .viewStateFlow
         .collect { viewState ->
           render(viewState)
         }
