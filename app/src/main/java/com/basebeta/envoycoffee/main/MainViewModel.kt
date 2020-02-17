@@ -2,127 +2,128 @@ package com.basebeta.envoycoffee.main
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import androidx.recyclerview.widget.DiffUtil
 import com.basebeta.envoycoffee.App
 import com.basebeta.envoycoffee.YelpApi
-import com.jakewharton.rxrelay2.BehaviorRelay
-import com.jakewharton.rxrelay2.PublishRelay
-import io.reactivex.Observable
-import io.reactivex.disposables.Disposable
-import io.reactivex.rxkotlin.subscribeBy
-import io.reactivex.schedulers.Schedulers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flattenMerge
-import kotlinx.coroutines.flow.flowOf
+import com.basebeta.envoycoffee.flow.FlowRelay
+import com.dropbox.flow.multicast.Multicaster
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.*
 
+@UseExperimental(FlowPreview::class)
 class MainViewModel(
-    private val yelpApi: YelpApi = App.yelpApi,
-    app: Application
-): AndroidViewModel(app) {
-    val viewState: BehaviorRelay<MainViewState> = BehaviorRelay.create()
-    private val disposable: Disposable
-    private var inputEvents: PublishRelay<InputEvent> = PublishRelay.create()
+  private val yelpApi: YelpApi = App.yelpApi,
+  app: Application
+) : AndroidViewModel(app) {
 
-    init {
-        disposable = inputEvents
-            .doOnNext {
-                Timber.d("--- emitted event $it")
-            }
-            .eventToResult() //publish(merge())
-            .doOnNext {
-                Timber.d("--- result event $it")
-            }
-            .resultToViewState() //scan
-            .doOnNext {
-                Timber.d("--- view state $it")
-            }.subscribeBy(onNext = {
-                viewState.accept(it)
-            })
+  val viewStateFlow: FlowRelay<MainViewState> = FlowRelay()
+  var inputEvents: FlowRelay<InputEvent> = FlowRelay()
+
+  init {
+    viewModelScope.launch {
+      val mcaster = Multicaster(
+        scope = viewModelScope,
+        bufferSize = 16,
+        source = inputEvents.onEach { Timber.i("input event $it") },
+        piggybackingDownstream = false,
+        keepUpstreamAlive = false,
+        onEach = { }
+      )
+      merge(
+        mcaster.newDownstream()
+          .filterIsInstance<InputEvent.LoadShopsEvent.ScreenLoadEvent>()
+          .loadShops(),
+        mcaster.newDownstream().filterIsInstance<InputEvent.LoadShopsEvent.ReloadShopsEvent>().loadShops(),
+        mcaster.newDownstream().filterIsInstance<InputEvent.LoadShopsEvent.ScrollToEndEvent>().loadShops(),
+        mcaster.newDownstream().filterIsInstance<InputEvent.TapItemEvent>().onItemTap()
+      )
+        .onEach { Timber.i("result $it") }
+        .resultToViewState()
+        .collect { viewState ->
+          viewStateFlow.send(viewState)
+        }
     }
+  }
 
-    override fun onCleared() {
-        super.onCleared()
-        disposable.dispose()
+  /**
+   * WARNING: Limited to 16 concurrent flows
+   */
+  private fun <T> merge(vararg flows: Flow<T>): Flow<T> = flowOf(*flows).flattenMerge()
+
+  private fun Flow<InputEvent.TapItemEvent>.onItemTap(): Flow<MainResult.TapItemResult> {
+    return map {
+      MainResult.TapItemResult(totalItemTaps = it.totalItemTaps + 1)
     }
+  }
 
-    // Why not just do a flatMap + when statement here?
-    private fun Observable<InputEvent>.eventToResult(): Observable<MainResult> {
-        return publish { multicastedEvent ->
-            Observable.merge(
-                multicastedEvent.ofType(InputEvent.LoadShopsEvent.ScreenLoadEvent::class.java).loadShops(),
-                multicastedEvent.ofType(InputEvent.TapItemEvent::class.java).onItemTap(),
-                multicastedEvent.ofType(InputEvent.LoadShopsEvent.ReloadShopsEvent::class.java).loadShops(),
-                multicastedEvent.ofType(InputEvent.LoadShopsEvent.ScrollToEndEvent::class.java).loadShops()
+  @UseExperimental(ExperimentalCoroutinesApi::class)
+  private fun Flow<MainResult>.resultToViewState(): Flow<MainViewState> {
+    return scan(MainViewState()) { lastState, result ->
+      when (result) {
+        is MainResult.QueryYelpResult -> {
+          lastState.copy(
+            currentPage = result.currentPage,
+            shopList = result.shopList,
+            showNetworkError = result.networkError,
+            forceRender = if (result.forceRender) UUID.randomUUID().toString() else ""
+          )
+        }
+        is MainResult.TapItemResult -> {
+          lastState.copy(totalItemTaps = result.totalItemTaps)
+        }
+      }
+    }
+      .distinctUntilChanged()
+  }
+
+  fun processInput(event: InputEvent) {
+    viewModelScope.launch {
+      inputEvents.send(event)
+    }
+  }
+
+  @UseExperimental(ExperimentalCoroutinesApi::class)
+  private fun Flow<InputEvent.LoadShopsEvent>.loadShops(): Flow<MainResult.QueryYelpResult> {
+    return flatMapLatest { event ->
+      return@flatMapLatest yelpApi.coGetShops(event.currentPage)
+        .map {
+          val newList = event.list.toMutableList().apply {
+            addAll(it)
+          }
+          val newPage = event.currentPage + 1
+          val diffResult = DiffUtil.calculateDiff(
+            ItemDiffHelper(
+              oldList = event.list,
+              newList = newList
             )
+          )
+          MainResult.QueryYelpResult(
+            shopList = newList,
+            networkError = false,
+            diffResult = diffResult,
+            currentPage = newPage
+          )
         }
+        .catch {
+          val diffResult = DiffUtil.calculateDiff(
+            ItemDiffHelper(
+              oldList = event.list,
+              newList = event.list
+            )
+          )
+          MainResult.QueryYelpResult(
+            shopList = event.list,
+            networkError = true,
+            forceRender = true,
+            diffResult = diffResult, currentPage = event.currentPage
+          )
+        }.flowOn(Dispatchers.IO)
     }
-
-    private fun Observable<out InputEvent.LoadShopsEvent>.loadShops(): Observable<MainResult.QueryYelpResult> {
-        return this.switchMap { event ->
-            return@switchMap yelpApi.getShops(event.currentPage)
-                    .subscribeOn(Schedulers.io())
-                    .map {
-                        val newList = event.list.toMutableList().apply {
-                            addAll(it)
-                        }
-                        val newPage = event.currentPage + 1
-                        val diffResult = DiffUtil.calculateDiff(ItemDiffHelper(oldList = event.list, newList = newList))
-                        MainResult.QueryYelpResult(
-                            shopList = newList,
-                            networkError = false,
-                            diffResult = diffResult,
-                            currentPage = newPage)
-                    }
-                    .onErrorReturn {
-                        val diffResult = DiffUtil.calculateDiff(ItemDiffHelper(oldList = event.list, newList = event.list))
-                        MainResult.QueryYelpResult(shopList = event.list,
-                            networkError = true,
-                            forceRender = true,
-                            diffResult = diffResult, currentPage = event.currentPage)
-                    }
-        }
-    }
-
-    private fun Observable<InputEvent.TapItemEvent>.onItemTap(): Observable<MainResult.TapItemResult> {
-        return map {
-            MainResult.TapItemResult(totalItemTaps = it.totalItemTaps + 1)
-        }
-    }
-
-    private fun Observable<MainResult>.resultToViewState(): Observable<MainViewState> {
-        return scan(MainViewState()) { lastState, result ->
-            when(result) {
-                is MainResult.QueryYelpResult -> {
-                    lastState.copy(
-                        currentPage = result.currentPage,
-                        shopList = result.shopList,
-                        showNetworkError = result.networkError,
-                        forceRender = if (result.forceRender) UUID.randomUUID().toString() else "")
-                }
-                is MainResult.TapItemResult -> {
-                    lastState.copy(totalItemTaps = result.totalItemTaps)
-                }
-            }
-        }.distinctUntilChanged()
-    }
-
-
-    fun processInput(event: InputEvent) {
-        inputEvents.accept(event)
-    }
-
-    class MainViewModelFactory(
-        private val yelpApi: YelpApi = App.yelpApi,
-        private val app: Application
-    ) : ViewModelProvider.Factory {
-
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel?> create(modelClass: Class<T>): T {
-            return MainViewModel(yelpApi = yelpApi, app = app) as T
-        }
-    }
+  }
 }

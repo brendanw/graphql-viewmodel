@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
   private var errorSnackbar: Snackbar? = null
-  private lateinit var viewModel: CoMainViewModel
+  private lateinit var viewModel: MainViewModel
   private var lastState: MainViewState? = null
 
   var loading = true
@@ -40,7 +40,7 @@ class MainActivity : AppCompatActivity() {
     viewModel = ViewModelProvider(
       this,
       VMFactory(App.instance)
-    ).get(CoMainViewModel::class.java)
+    ).get(MainViewModel::class.java)
 
     lifecycleScope.launch {
       viewModel
@@ -140,7 +140,7 @@ class VMFactory(
   private val app: Application
 ) : ViewModelProvider.Factory {
   override fun <T : ViewModel?> create(modelClass: Class<T>): T {
-    return CoMainViewModel(
+    return MainViewModel(
       app = app
     ) as T
   }
