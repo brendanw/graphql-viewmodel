@@ -44,12 +44,12 @@ class MainActivity : AppCompatActivity() {
 
     lifecycleScope.launch {
       viewModel
-        .viewStateFlow
+        .viewState
         .collect { viewState ->
           render(viewState)
         }
     }
-    viewModel.processInput(InputEvent.LoadShopsEvent.ScreenLoadEvent(lastState?.shopList ?: emptyList()))
+    viewModel.dispatchAction(InputEvent.LoadShopsEvent.ScreenLoadEvent(lastState?.shopList ?: emptyList()))
 
     recycler_view.addOnScrollListener(onScrollListener)
   }
@@ -66,7 +66,7 @@ class MainActivity : AppCompatActivity() {
         if (loading) {
           if (visibleItemCount + pastVisiblesItems >= totalItemCount) {
             loading = false
-            viewModel.processInput(
+            viewModel.dispatchAction(
               InputEvent.LoadShopsEvent.ScrollToEndEvent(
                 lastState?.shopList ?: emptyList(),
                 lastState?.currentPage ?: 0
@@ -87,7 +87,7 @@ class MainActivity : AppCompatActivity() {
     if (viewState.showNetworkError) {
       errorSnackbar = Snackbar.make(root, R.string.network_error, Snackbar.LENGTH_INDEFINITE)
       errorSnackbar?.setAction(R.string.reload_shops) {
-        viewModel.processInput(
+        viewModel.dispatchAction(
           InputEvent.LoadShopsEvent.ReloadShopsEvent(
             lastState?.shopList ?: emptyList(),
             lastState?.currentPage ?: 0
@@ -111,7 +111,7 @@ class MainActivity : AppCompatActivity() {
   private fun setupList() {
     with(recycler_view) {
       adapter = MainAdapter { item ->
-        viewModel.processInput(
+        viewModel.dispatchAction(
           InputEvent.TapItemEvent(
             shopName = item.name,
             totalItemTaps = lastState?.totalItemTaps ?: 0
