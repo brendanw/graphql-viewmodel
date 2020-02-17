@@ -16,13 +16,24 @@ import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.rxkotlin.subscribeBy
 import kotlinx.android.synthetic.main.main.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import timber.log.Timber
+import kotlin.coroutines.CoroutineContext
 
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), CoroutineScope {
+  private val job = Job()
+  override val coroutineContext: CoroutineContext get() = Dispatchers.Main + job
+
   private var errorSnackbar: Snackbar? = null
   private var compositeDisposable = CompositeDisposable()
-  private lateinit var viewModel: MainViewModel
+  //private lateinit var viewModel: MainViewModel
+  private lateinit var viewModel: CoMainViewModel
   private var lastState: MainViewState? = null
 
   var loading = true
@@ -39,11 +50,23 @@ class MainActivity : AppCompatActivity() {
 
     viewModel = ViewModelProviders.of(
       this,
-      MainViewModel.MainViewModelFactory(App.yelpApi, application)
-    ).get(MainViewModel::class.java)
+      CoMainViewModel.CoMainViewModelFactory(App.yelpApi, application)
+    ).get(CoMainViewModel::class.java)
 
-    compositeDisposable.add(
-      viewModel
+    /*viewModel = ViewModelProviders.of(
+      this,
+      MainViewModel.MainViewModelFactory(App.yelpApi, application)
+    ).get(MainViewModel::class.java)*/
+
+    launch {
+      viewModel.viewStateChannel
+        .asFlow()
+        .collect { viewState ->
+          render(viewState)
+        }
+    }
+
+    /*viewModel
         .viewState
         .observeOn(AndroidSchedulers.mainThread())
         .doOnNext { Timber.d("----- onNext VS $it") }
@@ -53,13 +76,9 @@ class MainActivity : AppCompatActivity() {
           lastState = it
         }, onError = {
           Timber.w(it, "something went terribly wrong processing view state")
-        })
-    )
+        }).also { compositeDisposable.add(it) }*/
 
-    if (!viewModel.hasInited) {
-      viewModel.processInput(MainEvent.LoadShopsEvent.ScreenLoadEvent(lastState?.shopList ?: emptyList()))
-      viewModel.hasInited = true
-    }
+    viewModel.processInput(InputEvent.LoadShopsEvent.ScreenLoadEvent(lastState?.shopList ?: emptyList()))
 
     recycler_view.addOnScrollListener(object : RecyclerView.OnScrollListener() {
       override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
@@ -73,7 +92,7 @@ class MainActivity : AppCompatActivity() {
           if (loading) {
             if (visibleItemCount + pastVisiblesItems >= totalItemCount) {
               loading = false
-              viewModel.processInput(MainEvent.LoadShopsEvent.ScrollToEndEvent(lastState?.shopList ?: emptyList(), lastState?.currentPage ?: 0))
+              viewModel.processInput(InputEvent.LoadShopsEvent.ScrollToEndEvent(lastState?.shopList ?: emptyList(), lastState?.currentPage ?: 0))
             }
           }
         }
@@ -84,6 +103,7 @@ class MainActivity : AppCompatActivity() {
   override fun onDestroy() {
     super.onDestroy()
     compositeDisposable.clear()
+    job.cancel()
   }
 
   private fun render(viewState: MainViewState) {
@@ -95,7 +115,7 @@ class MainActivity : AppCompatActivity() {
     if (viewState.showNetworkError) {
       errorSnackbar = Snackbar.make(root, R.string.network_error, Snackbar.LENGTH_INDEFINITE)
       errorSnackbar?.setAction(R.string.reload_shops) {
-        viewModel.processInput(MainEvent.LoadShopsEvent.ReloadShopsEvent(lastState?.shopList ?: emptyList(),
+        viewModel.processInput(InputEvent.LoadShopsEvent.ReloadShopsEvent(lastState?.shopList ?: emptyList(),
           lastState?.currentPage ?: 0))
       }
       errorSnackbar?.show()
@@ -114,7 +134,7 @@ class MainActivity : AppCompatActivity() {
 
   private fun setupList() {
     with(recycler_view) {
-      adapter = MainAdapter { item -> viewModel.processInput(MainEvent.TapItemEvent(shopName = item.name)) }
+      adapter = MainAdapter { item -> viewModel.processInput(InputEvent.TapItemEvent(shopName = item.name, totalItemTaps = lastState?.totalItemTaps ?: 0)) }
       layoutManager = LinearLayoutManager(this@MainActivity).apply {
         orientation = LinearLayoutManager.VERTICAL
       }
